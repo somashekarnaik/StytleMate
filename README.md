@@ -102,3 +102,11 @@ Render pricing before deploying; these estimates are not a quote.
 For production, the Blueprint sets `APP_ENV=production`,
 `AUTH_COOKIE_SECURE=true`, and generates `AUTH_SECRET`. Each account's
 wardrobe and images are protected by a signed, HTTP-only session cookie.
+
+For Vercel, set the project's Root Directory to `frontend`. Its
+`vercel.json` proxies `/api/*` to `https://stylemate.onrender.com`, the Render
+web service defined in the Blueprint, and serves the React SPA for other
+paths. The root-level `vercel.json` provides the same routing when Vercel's
+Root Directory is the repository root. The proxy works once the Render
+Blueprint is deployed and the API health check at
+`https://stylemate.onrender.com/api/health` succeeds.

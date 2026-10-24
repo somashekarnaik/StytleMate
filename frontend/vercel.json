@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/api",
+      "destination": "https://stylemate.onrender.com/api"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "https://stylemate.onrender.com/api/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
