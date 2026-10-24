@@ -1,0 +1,19 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: stylemate
+      POSTGRES_USER: stylemate
+      POSTGRES_PASSWORD: stylemate-local
+    ports:
+      - "5432:5432"
+    volumes:
+      - stylemate-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stylemate -d stylemate"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  stylemate-postgres:
