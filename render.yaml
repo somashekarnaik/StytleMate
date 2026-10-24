@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: stylemate
+    name: stylemate-api
     runtime: docker
     plan: 1c-2g
     region: singapore

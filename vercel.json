@@ -3,11 +3,11 @@
   "rewrites": [
     {
       "source": "/api",
-      "destination": "https://stylemate.onrender.com/api"
+      "destination": "https://stylemate-api.onrender.com/api"
     },
     {
       "source": "/api/:path*",
-      "destination": "https://stylemate.onrender.com/api/:path*"
+      "destination": "https://stylemate-api.onrender.com/api/:path*"
     },
     {
       "source": "/(.*)",
