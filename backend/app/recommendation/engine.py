@@ -1,6 +1,7 @@
 from itertools import product
 import colorsys
 import re
+from pathlib import Path
 
 from PIL import ImageColor
 
@@ -51,7 +52,7 @@ def recommend_outfits(
                         "style": item.style,
                         "gender": item.gender,
                         "color": item.color,
-                        "image_url": f"/media/{item.image_path}",
+                        "image_url": f"/api/clothing/media/{Path(item.image_path).name}",
                     }
                     for item in combo
                 ],

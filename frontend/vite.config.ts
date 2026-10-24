@@ -6,7 +6,6 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": "http://localhost:8000",
-      "/media": "http://localhost:8000",
     },
   },
 });

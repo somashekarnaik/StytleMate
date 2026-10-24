@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     ollama_host: str = "http://127.0.0.1:11434"
     ollama_vision_model: str = "qwen2.5vl:3b"
     ollama_timeout_seconds: int = 120
+    app_environment: str = "development"
+    auth_secret: str = ""
+    auth_cookie_secure: bool = False
 
     model_config = SettingsConfigDict(
         env_file=PROJECT_ROOT / ".env",
@@ -24,6 +27,10 @@ class Settings(BaseSettings):
     def upload_path(self) -> Path:
         path = Path(self.upload_dir)
         return path if path.is_absolute() else PROJECT_ROOT / path
+
+    @property
+    def frontend_dist_path(self) -> Path:
+        return PROJECT_ROOT / "frontend" / "dist"
 
 
 settings = Settings()

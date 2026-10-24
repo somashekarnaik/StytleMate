@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Integer, JSON, String
+from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -14,6 +14,9 @@ class ClothingItem(Base):
     category: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
     style: Mapped[str] = mapped_column(String(20), default="casual", nullable=False, index=True)
     gender: Mapped[str] = mapped_column(String(20), default="unisex", nullable=False, index=True)
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
     color: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
     season: Mapped[str] = mapped_column(String(20), default="all", nullable=False)
     occasions: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)

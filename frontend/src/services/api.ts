@@ -1,12 +1,19 @@
 import type { Category, ClothingItem, ClothingStyle, Gender, OutfitRecommendation, Weather } from "../types";
 
+export class ApiError extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as
       | { detail?: string }
       | null;
-    throw new Error(body?.detail ?? `Request failed (${response.status})`);
+    throw new ApiError(body?.detail ?? `Request failed (${response.status})`, response.status);
   }
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
@@ -21,6 +28,35 @@ export interface NewClothingItem {
   season: string;
   occasions: string;
   photo: File;
+}
+
+export interface AuthUser {
+  id: number;
+  email: string;
+}
+
+export function getCurrentUser(): Promise<{ user: AuthUser }> {
+  return request("/api/auth/me");
+}
+
+export function registerAccount(email: string, password: string): Promise<{ user: AuthUser }> {
+  return request("/api/auth/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export function loginAccount(email: string, password: string): Promise<{ user: AuthUser }> {
+  return request("/api/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export function logoutAccount(): Promise<void> {
+  return request("/api/auth/logout", { method: "POST" });
 }
 
 export function getClothing(): Promise<ClothingItem[]> {

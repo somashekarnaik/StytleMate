@@ -12,10 +12,16 @@ import {
 } from "lucide-react";
 import {
   addClothing,
+  ApiError,
   deleteClothing,
   getClothing,
+  getCurrentUser,
   getRecommendations,
+  loginAccount,
+  logoutAccount,
+  registerAccount,
   type RecommendationFilters,
+  type AuthUser,
 } from "../services/api";
 import type {
   Category,
@@ -65,6 +71,56 @@ function getMissingCategoryLabels(categoriesMissing: Category[]): string {
   return categoriesMissing.map((category) => labels[category]).join(" and ");
 }
 
+function AuthScreen({
+  onAuthenticated,
+  initialError = "",
+}: {
+  onAuthenticated: (user: AuthUser) => void;
+  initialError?: string;
+}) {
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [busy, setBusy] = useState(false);
+  const [authError, setAuthError] = useState(initialError);
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAuthError("");
+    setBusy(true);
+    const form = new FormData(event.currentTarget);
+    try {
+      const result = mode === "register"
+        ? await registerAccount(String(form.get("email")), String(form.get("password")))
+        : await loginAccount(String(form.get("email")), String(form.get("password")));
+      onAuthenticated(result.user);
+    } catch (reason) {
+      setAuthError(reason instanceof Error ? reason.message : "Could not sign you in.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <main className="auth-screen">
+      <form className="auth-card" onSubmit={(event) => void handleSubmit(event)}>
+        <a className="brand auth-brand" href="#home">
+          <span className="brand-mark"><Shirt size={21} /></span>
+          <span>stylemate<span className="brand-dot">.</span></span>
+        </a>
+        <p className="eyebrow">{mode === "register" ? "YOUR PRIVATE WARDROBE" : "WELCOME BACK"}</p>
+        <h1>{mode === "register" ? "Create your account" : "Sign in to StyleMate"}</h1>
+        <p className="auth-description">Your clothing photos and wardrobe are private to your account.</p>
+        {authError && <div className="notice error-notice" role="alert">{authError}</div>}
+        <label className="field-label">EMAIL<input name="email" type="email" autoComplete="email" required maxLength={254} /></label>
+        <label className="field-label">PASSWORD<input name="password" type="password" autoComplete={mode === "register" ? "new-password" : "current-password"} required minLength={12} maxLength={128} /><span className="auth-hint">Use at least 12 characters.</span></label>
+        <button className="primary-button" type="submit" disabled={busy}>{busy ? "Please wait…" : mode === "register" ? "Create account" : "Sign in"}</button>
+        <button className="auth-toggle" type="button" onClick={() => { setAuthError(""); setMode(mode === "login" ? "register" : "login"); }}>
+          {mode === "register" ? "Already have an account? Sign in" : "New to StyleMate? Create an account"}
+        </button>
+      </form>
+    </main>
+  );
+}
+
 function App() {
   const [items, setItems] = useState<ClothingItem[]>([]);
   const [recommendations, setRecommendations] = useState<OutfitRecommendation[]>([]);
@@ -80,6 +136,8 @@ function App() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [activeTab, setActiveTab] = useState<"wardrobe" | "outfits">("wardrobe");
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [photoDrafts, setPhotoDrafts] = useState<PhotoDraft[]>([]);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const photoDraftsRef = useRef(photoDrafts);
@@ -110,12 +168,25 @@ function App() {
   }, [weather, occasion, preferredColor, preferredStyle, preferredGender]);
 
   useEffect(() => {
+    getCurrentUser()
+      .then((result) => setAuthUser(result.user))
+      .catch((reason: unknown) => {
+        if (!(reason instanceof ApiError && reason.status === 401)) {
+          setError(reason instanceof Error ? reason.message : "Could not check your session.");
+        }
+        setAuthUser(null);
+      })
+      .finally(() => setAuthLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (!authUser) return;
     Promise.all([refreshItems(), refreshRecommendations()])
       .catch((reason: unknown) =>
         setError(reason instanceof Error ? reason.message : "Could not load StyleMate."),
       )
       .finally(() => setLoading(false));
-  }, [refreshItems, refreshRecommendations]);
+  }, [authUser, refreshItems, refreshRecommendations]);
 
   useEffect(() => () => {
     photoDraftsRef.current.forEach((draft) => URL.revokeObjectURL(draft.previewUrl));
@@ -263,10 +334,29 @@ function App() {
     }
   }
 
+  async function handleLogout() {
+    setError("");
+    try {
+      await logoutAccount();
+      setAuthUser(null);
+      setItems([]);
+      setRecommendations([]);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not sign out.");
+    }
+  }
+
   const categoryCounts = categories.reduce<Record<string, number>>((counts, category) => {
     counts[category] = items.filter((item) => item.category === category).length;
     return counts;
   }, {});
+
+  if (authLoading) {
+    return <main className="auth-screen"><div className="auth-loading">Loading StyleMate…</div></main>;
+  }
+  if (!authUser) {
+    return <AuthScreen initialError={error} onAuthenticated={(user) => { setError(""); setAuthUser(user); }} />;
+  }
 
   return (
     <main className="app-shell">
@@ -296,13 +386,13 @@ function App() {
           <strong>Wear what you have.</strong>
           <p>Your next favorite outfit might already be in your closet.</p>
         </div>
-        <div className="sidebar-footer"><span className="avatar">S</span><span>My StyleMate</span></div>
+        <div className="sidebar-footer"><span className="avatar">{authUser.email[0].toUpperCase()}</span><span className="sidebar-account">{authUser.email}</span></div>
       </aside>
 
       <section className="main-content">
         <header className="topbar">
           <span className="breadcrumb">YOUR STYLE / <strong>{activeTab === "wardrobe" ? "WARDROBE" : "OUTFIT IDEAS"}</strong></span>
-          <div className="weather-chip"><CloudSun size={17} /><span>Style for the day</span></div>
+          <div className="topbar-actions"><div className="weather-chip"><CloudSun size={17} /><span>Style for the day</span></div><button className="logout-button" type="button" onClick={() => void handleLogout()}>Sign out</button></div>
         </header>
         <div className="page-content">
           <section className="welcome-row">

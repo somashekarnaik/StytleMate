@@ -30,3 +30,16 @@ def upgrade_clothing_item_columns() -> None:
         for column, statement in migrations.items():
             if column not in columns:
                 connection.execute(text(statement))
+        if "user_id" not in columns:
+            connection.execute(
+                text(
+                    "ALTER TABLE clothing_items ADD COLUMN user_id "
+                    "INTEGER REFERENCES users(id)"
+                )
+            )
+        connection.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_clothing_items_user_id "
+                "ON clothing_items (user_id)"
+            )
+        )

@@ -1,0 +1,51 @@
+services:
+  - type: web
+    name: stylemate
+    runtime: docker
+    plan: 1c-2g
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    disk:
+      name: stylemate-uploads
+      mountPath: /var/data
+      sizeGB: 10
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: AUTH_COOKIE_SECURE
+        value: "true"
+      - key: AUTH_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: stylemate-db
+          property: connectionString
+      - key: UPLOAD_DIR
+        value: /var/data/clothing
+      - key: OLLAMA_HOST
+        value: http://stylemate-ollama:11434
+      - key: OLLAMA_VISION_MODEL
+        value: qwen2.5vl:3b
+      - key: OLLAMA_TIMEOUT_SECONDS
+        value: "300"
+
+  - type: pserv
+    name: stylemate-ollama
+    runtime: docker
+    plan: 4c-8g
+    region: singapore
+    dockerfilePath: ./deploy/ollama.Dockerfile
+    disk:
+      name: stylemate-model
+      mountPath: /root/.ollama
+      sizeGB: 10
+    envVars:
+      - key: OLLAMA_VISION_MODEL
+        value: qwen2.5vl:3b
+
+databases:
+  - name: stylemate-db
+    plan: basic-256mb
+    region: singapore
+    ipAllowList: []

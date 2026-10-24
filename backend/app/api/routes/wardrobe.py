@@ -2,9 +2,11 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.auth import get_current_user
 from app.core.config import settings
 from app.db.session import get_db
 from app.image_processing.clothing_analysis import (
@@ -13,6 +15,7 @@ from app.image_processing.clothing_analysis import (
 )
 from app.image_processing.processor import InvalidImageError, process_image
 from app.models.clothing_item import ClothingItem
+from app.models.user import User
 
 router = APIRouter(prefix="/clothing", tags=["wardrobe"])
 ALLOWED_CATEGORIES = {"top", "bottom", "shoes", "outerwear", "accessory"}
@@ -44,15 +47,40 @@ def _to_response(item: ClothingItem) -> dict:
         "color": item.color,
         "season": item.season,
         "occasions": item.occasions,
-        "image_url": f"/media/{item.image_path}",
+        "image_url": f"/api/clothing/media/{Path(item.image_path).name}",
         "created_at": item.created_at,
     }
 
 
 @router.get("")
-def list_clothing(db: Session = Depends(get_db)) -> list[dict]:
-    items = db.scalars(select(ClothingItem).order_by(ClothingItem.created_at.desc())).all()
+def list_clothing(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> list[dict]:
+    items = db.scalars(
+        select(ClothingItem)
+        .where(ClothingItem.user_id == user.id)
+        .order_by(ClothingItem.created_at.desc())
+    ).all()
     return [_to_response(item) for item in items]
+
+
+@router.get("/media/{filename}")
+def get_clothing_image(
+    filename: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> FileResponse:
+    safe_filename = Path(filename).name
+    item = db.scalar(
+        select(ClothingItem).where(
+            ClothingItem.user_id == user.id,
+            ClothingItem.image_path == safe_filename,
+        )
+    )
+    if item is None:
+        raise HTTPException(status_code=404, detail="Clothing image not found.")
+    return FileResponse(settings.upload_path / safe_filename)
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -66,6 +94,7 @@ async def add_clothing(
     occasions: str = Form(""),
     photo: UploadFile = File(...),
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> dict:
     category = category.strip().lower()
     style = style.strip().lower()
@@ -107,6 +136,7 @@ async def add_clothing(
         season=analysis["season"] if season == "auto" else season,
         occasions=[value.strip() for value in occasions.split(",") if value.strip()],
         image_path=filename,
+        user_id=user.id,
     )
     try:
         db.add(item)
@@ -120,8 +150,17 @@ async def add_clothing(
 
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_clothing(item_id: int, db: Session = Depends(get_db)) -> None:
-    item = db.get(ClothingItem, item_id)
+def delete_clothing(
+    item_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> None:
+    item = db.scalar(
+        select(ClothingItem).where(
+            ClothingItem.id == item_id,
+            ClothingItem.user_id == user.id,
+        )
+    )
     if item is None:
         raise HTTPException(status_code=404, detail="Clothing item not found.")
     image_path = settings.upload_path / Path(item.image_path).name

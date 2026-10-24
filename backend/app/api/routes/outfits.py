@@ -1,11 +1,14 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.auth import get_current_user
 from app.db.session import get_db
 from app.core.config import settings
 from app.image_processing.outfit_preview import create_outfit_preview
 from app.models.clothing_item import ClothingItem
+from app.models.user import User
 from app.recommendation.engine import recommend_outfits
 
 router = APIRouter(prefix="/outfits", tags=["outfits"])
@@ -24,8 +27,11 @@ def get_recommendations(
     gender: str | None = Query(default=None, pattern="^(men|women)$"),
     limit: int = Query(default=6, ge=1, le=20),
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> dict:
-    items = db.scalars(select(ClothingItem)).all()
+    items = db.scalars(
+        select(ClothingItem).where(ClothingItem.user_id == user.id)
+    ).all()
     recommendations = recommend_outfits(
         list(items),
         weather=weather,
@@ -40,13 +46,8 @@ def get_recommendations(
             next(item for item in items if item.id == entry["id"])
             for entry in recommendation["items"]
         ]
-        recommendation["preview_url"] = create_outfit_preview(
-            [
-                {"id": item.id, "image_path": item.image_path}
-                for item in preview_items
-            ],
-            settings.upload_path,
-        )
+        item_ids = "&".join(f"item_ids={item.id}" for item in preview_items)
+        recommendation["preview_url"] = f"/api/outfits/preview?{item_ids}"
     missing_categories = [
         category
         for category in ("top", "bottom", "shoes")
@@ -78,3 +79,31 @@ def get_recommendations(
         message = None
 
     return {"recommendations": recommendations, "message": message}
+
+
+@router.get("/preview")
+def get_outfit_preview(
+    item_ids: list[int] = Query(..., min_length=1, max_length=3),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> FileResponse:
+    if len(set(item_ids)) != len(item_ids):
+        raise HTTPException(status_code=422, detail="Outfit items must be unique.")
+    items = db.scalars(
+        select(ClothingItem).where(
+            ClothingItem.user_id == user.id,
+            ClothingItem.id.in_(item_ids),
+        )
+    ).all()
+    if len(items) != len(item_ids):
+        raise HTTPException(status_code=404, detail="Outfit items not found.")
+    ordered_items = {item.id: item for item in items}
+    preview_url = create_outfit_preview(
+        [
+            {"id": item_id, "image_path": ordered_items[item_id].image_path}
+            for item_id in item_ids
+        ],
+        settings.upload_path,
+    )
+    preview_path = settings.upload_path / preview_url.removeprefix("/media/")
+    return FileResponse(preview_path)
