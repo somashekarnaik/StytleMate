@@ -1,6 +1,6 @@
 import base64
 import json
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from app.core.config import settings
@@ -54,13 +54,15 @@ def analyze_clothing(image_data: bytes) -> dict[str, str]:
     request = Request(
         f"{settings.ollama_host.rstrip('/')}/api/generate",
         data=request_body,
-        headers={"Content-Type": "application/json"},
+        headers=_ollama_headers(),
         method="POST",
     )
 
     try:
         with urlopen(request, timeout=settings.ollama_timeout_seconds) as response:
             payload = json.loads(response.read())
+    except HTTPError as exc:
+        raise _ollama_http_error(exc) from exc
     except (TimeoutError, URLError) as exc:
         raise ClothingAnalysisError(
             "Vision analysis is unavailable. Ensure Ollama is running and reachable "
@@ -126,13 +128,15 @@ def analyze_outfit(image_data: bytes) -> dict[str, str | list[str]]:
     request = Request(
         f"{settings.ollama_host.rstrip('/')}/api/generate",
         data=request_body,
-        headers={"Content-Type": "application/json"},
+        headers=_ollama_headers(),
         method="POST",
     )
 
     try:
         with urlopen(request, timeout=settings.ollama_timeout_seconds) as response:
             payload = json.loads(response.read())
+    except HTTPError as exc:
+        raise _ollama_http_error(exc) from exc
     except (TimeoutError, URLError) as exc:
         raise ClothingAnalysisError(
             "Vision analysis is unavailable. Ensure Ollama is running and reachable "
@@ -166,6 +170,29 @@ def analyze_outfit(image_data: bytes) -> dict[str, str | list[str]]:
         "strengths": strengths,
         "suggestions": suggestions,
     }
+
+
+def _ollama_headers() -> dict[str, str]:
+    headers = {"Content-Type": "application/json"}
+    if settings.ollama_api_key:
+        headers["Authorization"] = f"Bearer {settings.ollama_api_key}"
+    return headers
+
+
+def _ollama_http_error(error: HTTPError) -> ClothingAnalysisError:
+    if error.code in {401, 403}:
+        return ClothingAnalysisError(
+            "Vision analysis could not authenticate with Ollama. Configure "
+            "OLLAMA_API_KEY on the API server and try again."
+        )
+    if error.code == 404:
+        return ClothingAnalysisError(
+            "The configured Ollama vision model was not found. Check "
+            f"OLLAMA_VISION_MODEL ({settings.ollama_vision_model}) and try again."
+        )
+    return ClothingAnalysisError(
+        f"Vision analysis failed because Ollama returned HTTP {error.code}."
+    )
 
 
 def _required_text(payload: dict, field: str, max_length: int) -> str:

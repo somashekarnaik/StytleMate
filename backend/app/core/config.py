@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     max_upload_bytes: int = 8 * 1024 * 1024
     frontend_origin: str = "http://localhost:5173"
     ollama_host: str = "http://127.0.0.1:11434"
+    ollama_api_key: str = ""
     ollama_vision_model: str = "qwen2.5vl:3b"
     ollama_timeout_seconds: int = 120
     app_environment: str = "development"

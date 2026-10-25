@@ -15,7 +15,7 @@ Install the local vision model once:
 ollama pull qwen2.5vl:3b
 ```
 
-Keep Ollama running while using photo analysis. By default the backend connects to `http://127.0.0.1:11434`; configure `OLLAMA_HOST`, `OLLAMA_VISION_MODEL`, or `OLLAMA_TIMEOUT_SECONDS` in `.env` if needed.
+Keep Ollama running while using photo analysis. By default the backend connects to `http://127.0.0.1:11434`; configure `OLLAMA_HOST`, `OLLAMA_API_KEY`, `OLLAMA_VISION_MODEL`, or `OLLAMA_TIMEOUT_SECONDS` in `.env` if needed.
 
 ## Run locally
 
@@ -61,4 +61,4 @@ Photos are normalized to WebP before analysis. Garment and outfit analysis requi
 
 Deploy the frontend with Vercel using `frontend` as the project Root Directory. Its `vercel.json` proxies `/api/*` requests to the configured backend.
 
-For online photo analysis, configure that backend with an `OLLAMA_HOST` URL for an Ollama service running in the same private network or otherwise securely reachable by the API. Do not expose an unauthenticated local Ollama service directly to the public internet.
+For online photo analysis, use a secure Ollama host. Ollama Cloud uses `OLLAMA_HOST=https://ollama.com`, an `OLLAMA_API_KEY` created in the Ollama account, and a cloud vision model such as `qwen3-vl:235b-cloud`. Do not expose an unauthenticated local Ollama service directly to the public internet.
