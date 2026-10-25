@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import {
   addClothing,
+  analyzeOutfit,
   ApiError,
   deleteClothing,
   getClothing,
@@ -28,6 +29,7 @@ import type {
   ClothingStyle,
   ClothingItem,
   Gender,
+  OutfitAnalysis,
   OutfitRecommendation,
   Weather,
 } from "../types";
@@ -139,9 +141,14 @@ function App() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [photoDrafts, setPhotoDrafts] = useState<PhotoDraft[]>([]);
+  const [outfitPhoto, setOutfitPhoto] = useState<{ file: File; previewUrl: string } | null>(null);
+  const [outfitAnalysis, setOutfitAnalysis] = useState<OutfitAnalysis | null>(null);
+  const [analyzingOutfit, setAnalyzingOutfit] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const photoDraftsRef = useRef(photoDrafts);
+  const outfitPhotoRef = useRef(outfitPhoto);
   photoDraftsRef.current = photoDrafts;
+  outfitPhotoRef.current = outfitPhoto;
 
   const refreshItems = useCallback(async () => {
     setItems(await getClothing());
@@ -191,6 +198,39 @@ function App() {
   useEffect(() => () => {
     photoDraftsRef.current.forEach((draft) => URL.revokeObjectURL(draft.previewUrl));
   }, []);
+
+  useEffect(() => () => {
+    if (outfitPhotoRef.current) URL.revokeObjectURL(outfitPhotoRef.current.previewUrl);
+  }, []);
+
+  function handleOutfitPhotoSelected(file: File | undefined) {
+    setError("");
+    setOutfitAnalysis(null);
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) {
+      setError("Outfit photos must be 8 MB or smaller.");
+      return;
+    }
+    if (outfitPhoto) URL.revokeObjectURL(outfitPhoto.previewUrl);
+    setOutfitPhoto({ file, previewUrl: URL.createObjectURL(file) });
+  }
+
+  async function handleAnalyzeOutfit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    if (!outfitPhoto) {
+      setError("Choose a photo of an outfit to analyze.");
+      return;
+    }
+    setAnalyzingOutfit(true);
+    try {
+      setOutfitAnalysis(await analyzeOutfit(outfitPhoto.file));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not analyze this outfit.");
+    } finally {
+      setAnalyzingOutfit(false);
+    }
+  }
 
   async function handleAddClothing(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -341,6 +381,9 @@ function App() {
       setAuthUser(null);
       setItems([]);
       setRecommendations([]);
+      if (outfitPhoto) URL.revokeObjectURL(outfitPhoto.previewUrl);
+      setOutfitPhoto(null);
+      setOutfitAnalysis(null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not sign out.");
     }
@@ -530,6 +573,45 @@ function App() {
                 <Sparkles className="heading-sparkle" size={25} />
               </div>
               <p className="outfit-intro">StyleMate builds outfit ideas from your clothes and suggests what would complete each look.</p>
+              <section className="outfit-analysis-card" aria-labelledby="outfit-analysis-heading">
+                <div className="outfit-analysis-copy">
+                  <p className="eyebrow">PERSONAL STYLE CHECK</p>
+                  <h3 id="outfit-analysis-heading">Analyze a complete outfit</h3>
+                  <p>Upload a photo to get feedback on the pieces, color palette, and ways to style the look.</p>
+                  <form className="outfit-analysis-form" onSubmit={(event) => void handleAnalyzeOutfit(event)}>
+                    <label className="outfit-photo-picker">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        aria-label="Choose a complete outfit photo"
+                        disabled={analyzingOutfit}
+                        onChange={(event) => {
+                          handleOutfitPhotoSelected(event.target.files?.[0]);
+                          event.target.value = "";
+                        }}
+                      />
+                      <Upload size={16} />
+                      {outfitPhoto ? outfitPhoto.file.name : "Choose outfit photo"}
+                    </label>
+                    <button className="primary-button" type="submit" disabled={!outfitPhoto || analyzingOutfit}>
+                      <Sparkles size={15} />
+                      {analyzingOutfit ? "Analyzing outfit…" : "Analyze outfit"}
+                    </button>
+                  </form>
+                </div>
+                {outfitPhoto && (
+                  <img className="outfit-analysis-photo" src={outfitPhoto.previewUrl} alt="Selected outfit for analysis" />
+                )}
+                {outfitAnalysis && (
+                  <div className="outfit-analysis-result" aria-live="polite">
+                    <p>{outfitAnalysis.summary}</p>
+                    <div><strong>Pieces spotted</strong><span>{outfitAnalysis.items.join(" · ")}</span></div>
+                    <div><strong>Color palette</strong><span>{outfitAnalysis.color_palette}</span></div>
+                    <div><strong>What works</strong><ul>{outfitAnalysis.strengths.map((strength) => <li key={strength}>{strength}</li>)}</ul></div>
+                    <div><strong>Try this</strong><ul>{outfitAnalysis.suggestions.map((suggestion) => <li key={suggestion}>{suggestion}</li>)}</ul></div>
+                  </div>
+                )}
+              </section>
               <div className="filter-row">
                 <label className="filter-field">WEATHER<select value={weather} onChange={(event) => setWeather(event.target.value as Weather | "")}><option value="">Any weather</option><option value="hot">Warm & sunny</option><option value="mild">Mild</option><option value="cold">Cold</option><option value="rainy">Rainy</option></select></label>
                 <label className="filter-field">OCCASION<select value={occasion} onChange={(event) => setOccasion(event.target.value)}><option>Any occasion</option><option>Everyday</option><option>Work</option><option>Casual</option><option>Formal</option></select></label>

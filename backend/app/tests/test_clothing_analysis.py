@@ -4,6 +4,7 @@ from unittest.mock import Mock, patch
 
 from app.image_processing.clothing_analysis import (
     ClothingAnalysisError,
+    analyze_outfit,
     analyze_clothing,
 )
 
@@ -57,6 +58,40 @@ class ClothingAnalysisTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ClothingAnalysisError, "unsupported category"):
             analyze_clothing(b"image bytes")
+
+    @patch("app.image_processing.clothing_analysis.urlopen")
+    def test_analyzes_a_complete_outfit(self, urlopen: Mock) -> None:
+        urlopen.return_value = self._mock_response(
+            {
+                "summary": "A relaxed, coordinated everyday look.",
+                "items": ["White shirt", "Blue jeans", "White sneakers"],
+                "color_palette": "Neutral white with blue denim.",
+                "strengths": ["The shoes complement the shirt."],
+                "suggestions": ["Add a light jacket for cooler weather."],
+            }
+        )
+
+        result = analyze_outfit(b"image bytes")
+
+        self.assertEqual(result["summary"], "A relaxed, coordinated everyday look.")
+        self.assertEqual(len(result["items"]), 3)
+        request_data = json.loads(urlopen.call_args.args[0].data)
+        self.assertIn("complete outfit", request_data["prompt"])
+
+    @patch("app.image_processing.clothing_analysis.urlopen")
+    def test_rejects_incomplete_outfit_analysis(self, urlopen: Mock) -> None:
+        urlopen.return_value = self._mock_response(
+            {
+                "summary": "A coordinated look.",
+                "items": ["A shirt"],
+                "color_palette": "Neutral.",
+                "strengths": [],
+                "suggestions": ["Try a jacket."],
+            }
+        )
+
+        with self.assertRaisesRegex(ClothingAnalysisError, "valid strengths"):
+            analyze_outfit(b"image bytes")
 
 
 if __name__ == "__main__":

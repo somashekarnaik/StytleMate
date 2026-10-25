@@ -45,3 +45,11 @@ export interface OutfitRecommendation {
   reason: string;
   preview_url: string;
 }
+
+export interface OutfitAnalysis {
+  summary: string;
+  items: string[];
+  color_palette: string;
+  strengths: string[];
+  suggestions: string[];
+}

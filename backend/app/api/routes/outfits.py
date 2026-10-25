@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -6,7 +6,12 @@ from sqlalchemy.orm import Session
 from app.core.auth import get_current_user
 from app.db.session import get_db
 from app.core.config import settings
+from app.image_processing.clothing_analysis import (
+    ClothingAnalysisError,
+    analyze_outfit,
+)
 from app.image_processing.outfit_preview import create_outfit_preview
+from app.image_processing.processor import InvalidImageError, process_image
 from app.models.clothing_item import ClothingItem
 from app.models.user import User
 from app.recommendation.engine import recommend_outfits
@@ -16,6 +21,27 @@ STYLE_FILTER = (
     "western|casual|traditional|formal|sports|winter|summer|party|wedding|"
     "loungewear|streetwear|college"
 )
+
+
+@router.post("/analyze", status_code=status.HTTP_200_OK)
+async def analyze_outfit_photo(
+    photo: UploadFile = File(...),
+    _user: User = Depends(get_current_user),
+) -> dict:
+    try:
+        data = await photo.read(settings.max_upload_bytes + 1)
+    finally:
+        await photo.close()
+    if len(data) > settings.max_upload_bytes:
+        raise HTTPException(status_code=413, detail="Image must be 8 MB or smaller.")
+    try:
+        processed, _ = process_image(data)
+    except InvalidImageError as exc:
+        raise HTTPException(status_code=415, detail=str(exc)) from exc
+    try:
+        return analyze_outfit(processed)
+    except ClothingAnalysisError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.get("/recommendations")

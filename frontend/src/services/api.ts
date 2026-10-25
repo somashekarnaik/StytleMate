@@ -1,4 +1,4 @@
-import type { Category, ClothingItem, ClothingStyle, Gender, OutfitRecommendation, Weather } from "../types";
+import type { Category, ClothingItem, ClothingStyle, Gender, OutfitAnalysis, OutfitRecommendation, Weather } from "../types";
 
 export class ApiError extends Error {
   constructor(message: string, public readonly status: number) {
@@ -71,6 +71,12 @@ export function addClothing(item: NewClothingItem): Promise<ClothingItem> {
 
 export function deleteClothing(id: number): Promise<void> {
   return request(`/api/clothing/${id}`, { method: "DELETE" });
+}
+
+export function analyzeOutfit(photo: File): Promise<OutfitAnalysis> {
+  const form = new FormData();
+  form.append("photo", photo);
+  return request("/api/outfits/analyze", { method: "POST", body: form });
 }
 
 export interface RecommendationFilters {
